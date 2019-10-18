@@ -65,13 +65,15 @@ plt.imshow(img_transformed)
 plt.show()
 
 base_dir = os.getcwd()
-ILSVRC_class_index = json.load(open(os.path.join(base_dir, '/data/imagenet_class_index.json'), 'r'))
+ILSVRC_class_index = json.load(open(os.path.join(base_dir, 'data/imagenet_class_index.json'), 'r'))
 
 predictor = ILSVRCPredictor(ILSVRC_class_index)
 
+img = Image.open(image_file_path)
+img_transformed = transform(img)
 inputs = img_transformed.unsqueeze_(0) # torch.Size([1, 3, 224, 224]) # torch.Tensor.unsqueeze_: In-place version of :meth:`~Tensor.unsqueeze`
 
 out = net(inputs)
 result = predictor.predict_max(out)
 
-print("predicted result:", out)
+print("predicted result:", result)
