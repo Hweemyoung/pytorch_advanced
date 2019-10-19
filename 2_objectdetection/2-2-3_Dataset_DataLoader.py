@@ -10,10 +10,97 @@ import numpy as np
 import torch
 import torch.utils.data as data
 
+from .utils.data_augumentation import Compose, ConvertFromInts, ToAbsoluteCoords, PhotometricDistort, Expand, RandomSampleCrop, RandomMirror, ToPercentCoords, Resize, SubtractMeans
+
 # 乱数のシードを設定
 torch.manual_seed(1234)
 np.random.seed(1234)
 random.seed(1234)
+
+# VOC2012 Dataset
+class VOCDataset(data.dataset):
+    def __init__(self, img_list, anno_list, phase, transform, transform_anno):
+        '''
+        :param img_list: list
+        :param anno_list: list
+        :param phase: str
+        :param transform: instance of class DataTransform
+        :param transform_anno: instance of class Anno_xml2list
+        '''
+        self.img_list = img_list
+        self.anno_list = anno_list
+        self.phase = phase
+        #self.transform = transform
+        self.transform = DataTransform(input_size, color_mean)
+        #self.transform_anno = transform_anno
+        self.transform_anno = Anno_xml2list(voc_classes)
+
+    def __len__(self):
+        '''
+        :return: length of self.img_list
+        '''
+        return len(self.img_list)
+
+    def __getitem__(self, index):
+        '''
+        get tensor data of preprocessed img and annotation
+        :param index:
+        :return:
+        '''
+        # 1. load img
+        # 1.1 file path of index
+        image_file_path = self.img_list[index]
+        # 1.2 get [H],[W],[BGR]
+        img = cv2.imread(image_file_path)
+        # 1.3 get size of img
+        height, width, channels = img.shape
+
+        # 2. xml annotations to list
+        # 2.1 anno file path of index
+        anno_file_path = self.anno_list[index]
+        # 2.2 get list of annotations
+        anno_list = self.transform_anno(anno_file_path, width, height)
+
+        # 3. preprocess
+        # 3.1
+        img, boxes, labels = self.transform(img, self.phase, boxes=anno_list[:, :4], labels=anno_list[:, 4])
+
+class DataTransform():
+    def __init__(self, input_size, color_mean):
+        '''
+        :param input_size: int
+            size to which image will be resized
+        :param color_mean: tuple
+            (B, G, R). every mean of B, G, R
+        '''
+        self.data_transform = {
+            'train': Compose([
+                ConvertFromInts(),
+                ToAbsoluteCoords(),
+                PhotometricDistort(),
+                Expand(color_mean),
+                RandomSampleCrop(),
+                ToPercentCoords(),
+                Resize(input_size),
+                SubtractMeans(color_mean)
+            ]),
+            'val': Compose([
+                ConvertFromInts(),
+                Resize(input_size),
+                SubtractMeans(color_mean)
+            ])
+        }
+
+    def __call__(self, img, phase, boxes, labels):
+        '''
+        :param img:
+        :param phase: str
+            'train' or 'val'. Mode for preprocessing
+        :param boxes:
+        :param labels:
+        :return:
+        '''
+        return self.data_transform[phase](img, boxes, labels)
 
 class Anno_xml2list(object):
     def __init__(self, classes):
@@ -115,4 +202,32 @@ image_file_path = train_img_list[ind]
 img =cv2.imread(image_file_path) # [h][w][BGR]
 height, width, channels = img.shape
 
+# check operations
 transform_anno(val_anno_list[ind], width, height)
+
+# 1. Load image
+image_file_path = train_img_list
+img = cv2.imread(image_file_path) #[H][W][BGR]
+height, width, channels = img.shape
+
+# 2. annotations to list
+transform_anno = Anno_xml2list(voc_classes)
+anno_list = transform_anno(train_anno_list, width, height)
+
+# 3. show original img
+plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+plt.show()
+
+# 4. create preprocessor class
+color_mean = (104, 117, 123)
+input_size = 300 # resize to (300, 300)
+transform = DataTransform(input_size, color_mean)
+
+# 5. show training img
+phase = 'train'
+img_transformed, boxes, labels = transform(img, phase, boxes=anno_list[:, :4], labels=anno_list[:, 4])
+plt.imshow(cv2.cvtColor(img_transformed, cv2.COLOR_BGR2RGB))
+plt.show()
+
+# set up dataset
+# VOC2012 dataset
