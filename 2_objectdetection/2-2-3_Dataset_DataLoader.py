@@ -47,6 +47,10 @@ class VOCDataset(data.dataset):
         :param index:
         :return:
         '''
+        im, gt, h, w = self.pull_item(index)
+        return im, gt
+
+    def pull_item(self, index):
         # 1. load img
         # 1.1 file path of index
         image_file_path = self.img_list[index]
@@ -62,8 +66,15 @@ class VOCDataset(data.dataset):
         anno_list = self.transform_anno(anno_file_path, width, height)
 
         # 3. preprocess
-        # 3.1
+        # 3.1 transform
         img, boxes, labels = self.transform(img, self.phase, boxes=anno_list[:, :4], labels=anno_list[:, 4])
+        # 3.2.1 BGR to RGB
+        # 3.2.2 (height, width, RGB) to (RGB, height, width)
+        img = torch.from_numpy(img[:, :, (2, 1, 0)]).permute(2, 0, 1)
+        # 3.3 pair(BBox, label)
+        gt = np.hstack((boxes, np.expand_dims(labels, axis=1)))
+
+        return img, gt, height, width
 
 class DataTransform():
     def __init__(self, input_size, color_mean):
@@ -184,6 +195,26 @@ def make_datapath_list(rootpath):
 
     return train_img_list, train_anno_list, val_img_list, val_anno_list
 
+def od_collate_fn(batch):
+    '''
+    customize collate function(minibatch manager)
+    :param batch:
+    :return imgs: 4-d Tensor
+            targets: list
+    '''
+    targets = []
+    imgs = []
+    for sample in batch:
+        imgs.append(sample[0]) # sample[0]: img
+        targets.append(torch.FloatTensor(sample[1])) # sample[1]: annotation gt
+
+    # len(imgs) == minibatch size
+    # comprises torch.Size([3, 300, 300]) (RGB, width, height)
+    # let's convert to torch.Size([batch_num, 3, 300, 300])
+    imgs = torch.stack(imgs, dim=0)
+
+    return imgs, targets
+
 rootpath = './data/VOCdevkit/VOC2012'
 train_img_list, train_anno_list, val_img_list, val_anno_list = make_datapath_list(rootpath)
 
@@ -231,3 +262,32 @@ plt.show()
 
 # set up dataset
 # VOC2012 dataset
+
+# checkpoint
+color_mean = (104, 117, 123)# BGR mean
+input_size = 300# 300x300
+
+train_dataset = VOCDataset(train_img_list, train_anno_list, phase='train', transform=DataTransform(input_size, color_mean), transform_anno=transform_anno)
+val_dataset = VOCDataset(val_img_list, val_anno_list, phase='val', transform=DataTransform(input_size, color_mean), transform_anno=transform_anno)
+
+val_dataset.__getitem__(1)
+
+# create dataloader with od_collate_fn
+batch_size = 4
+train_dataloader = data.DataLoader(train_dataset, batch_size, shuffle=True, collate_fn=od_collate_fn)
+val_dataloader = data.DataLoader(val_dataset, batch_size, shuffle=True, collate_fn=od_collate_fn)
+
+dataloaders_dict = {
+    'train': train_dataloader,
+    'val': val_dataloader
+}
+
+batch_iterator = iter(dataloaders_dict['val']) #__DataLoaderIter class
+images, targets = next(batch_iterator) # return batch
+print('images.size == ', images.size())
+print('len(images) == ', len(images))
+print('target[1].size ==', targets[1].size())
+
+# count number of data in each dataset
+print('train_dataset.__len__() == ', train_dataset.__len__())
+print('val_dataset.__len__() == ', val_dataset.__len__())
