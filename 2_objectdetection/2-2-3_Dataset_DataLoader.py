@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import torch.utils.data as data
 
-from .utils.data_augumentation import Compose, ConvertFromInts, ToAbsoluteCoords, PhotometricDistort, Expand, RandomSampleCrop, RandomMirror, ToPercentCoords, Resize, SubtractMeans
+from utils.data_augumentation import Compose, ConvertFromInts, ToAbsoluteCoords, PhotometricDistort, Expand, RandomSampleCrop, RandomMirror, ToPercentCoords, Resize, SubtractMeans
 
 # 乱数のシードを設定
 torch.manual_seed(1234)
